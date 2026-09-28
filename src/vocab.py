@@ -13,6 +13,8 @@ class VocabIndex:
         self.model = model
         self.id_to_str: dict[int, str] = {token_id: token_str for token_str, token_id in vocab.items()}
         self.digits_id: set[int] = {token_id for token_id, token_str in self.id_to_str.items() if token_str in "0123456789"}
+        self.dot_id: int = vocab["."]
+        self.minus_id: int = vocab["-"]
         self.structural_ids: dict[str, int] = self._build_structural_ids()
         self.forced_sequences: dict[str, list[int]] = self._build_forced_sequences()
 
