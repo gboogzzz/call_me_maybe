@@ -12,11 +12,13 @@ class VocabIndex:
 
         self.model = model
         self.id_to_str: dict[int, str] = {token_id: token_str for token_str, token_id in vocab.items()}
+        self.space_id: int = vocab["Ġ"]
         self.digits_id: set[int] = {token_id for token_id, token_str in self.id_to_str.items() if token_str in "0123456789"}
         self.dot_id: int = vocab["."]
         self.minus_id: int = vocab["-"]
         self.structural_ids: dict[str, int] = self._build_structural_ids()
-        self.forced_sequences: dict[str, list[int]] = self._build_forced_sequences()
+        self.forced_sequences_first: dict[str, list[int]] = self._build_forced_sequences(['"name"', '"prompt"', '"parameters"'])
+        self.forced_sequences_next: dict[str, list[int]] = self._build_forced_sequences([' "name"', ' "prompt"', ' "parameters"'])
 
     def _encode_to_ids(self, text: str) -> list[int]:
         """Encode a text string into a plain list of token ids.
@@ -45,23 +47,21 @@ class VocabIndex:
 
         return struct_ids
 
-    def _build_forced_sequences(self) -> dict[str, list[int]]:
-        """Precompute the token id sequences for known fixed JSON keys.
+    def _build_forced_sequences(self, keys: list[str]) -> dict[str, list[int]]:
+        """Precompute the token id sequences for a set of fixed JSON key literals.
+
+        Args:
+            keys: The quoted key literals to encode, with or without a
+                leading space (e.g. '"name"' or ' "name"').
 
         Returns:
-            A dict from a quoted key literal (e.g. '"name"') to the
-            list of token ids that produce it.
+            A dict from the stripped, quoted key literal to the list of
+            token ids that produce it in that context.
         """
-        struct_values: list[str] = ['"name"', '"prompt"', '"parameters"']
         forced_seq: dict[str, list[int]] = {}
 
-        for v in struct_values:
+        for v in keys:
             tokens_ids = self._encode_to_ids(v)
-            forced_seq[v] = tokens_ids
+            forced_seq[v.strip()] = tokens_ids
 
         return forced_seq
-
-    
-
-
-        
