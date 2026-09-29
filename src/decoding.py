@@ -24,7 +24,6 @@ class NumberState(Enum):
 
 
 class StringState(Enum):
-    OPEN_QUOTE = auto()
     INSIDE = auto()
     CLOSED = auto()
 
@@ -129,3 +128,44 @@ def generate_number(model: Small_LLM_Model, vocab: VocabIndex, input_ids: list[i
     result: tuple[float, list[int]] = (float(gen), input_ids)
 
     return result
+
+
+def generate_string(model: Small_LLM_Model, vocab: VocabIndex, input_ids: list[int]) -> tuple[str, list[int]]:
+    """Generate a JSON-valid string via constrained decoding.
+
+    Caps the content length (max_length) to guarantee termination
+    even if the model never favors closing the string on its own.
+
+    Args:
+        model: The language model used to obtain logits.
+        vocab: Precomputed vocabulary lookups.
+        input_ids: The token ids generated so far.
+
+    Returns:
+        A tuple of the generated string content (without the
+        surrounding quotes) and the updated input_ids.
+    """
+    state = StringState.INSIDE
+    gen = ""
+    max_str_len = 80
+
+    while state != StringState.CLOSED:
+        if state == StringState.INSIDE:
+            logits = model.get_logits_from_input_ids(input_ids)
+            if len(gen) >= max_str_len:
+                valid_ids = {vocab.structural_ids['"']}
+            else:
+                valid_ids = vocab.string_content_ids | {vocab.structural_ids['"']}
+            next_token = select_next_token(logits, valid_ids)
+            input_ids.append(next_token)
+            if next_token == vocab.structural_ids['"']:
+                state = StringState.CLOSED
+            else:
+                gen += vocab.id_to_str[next_token]
+
+    result: tuple[str, list[int]] = (gen, input_ids)
+
+    return result
+
+
+

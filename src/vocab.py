@@ -12,6 +12,8 @@ class VocabIndex:
 
         self.model = model
         self.id_to_str: dict[int, str] = {token_id: token_str for token_str, token_id in vocab.items()}
+        quote_containing_ids: set[int] = {token_id for token_id, token_str in self.id_to_str.items() if '"' in token_str}
+        self.string_content_ids: set[int] = set(self.id_to_str.keys()) - quote_containing_ids 
         self.space_id: int = vocab["Ġ"]
         self.digits_id: set[int] = {token_id for token_id, token_str in self.id_to_str.items() if token_str in "0123456789"}
         self.zero_id: int = vocab["0"]
