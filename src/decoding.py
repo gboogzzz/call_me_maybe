@@ -15,8 +15,11 @@ class StructuralState(Enum):
 
 class NumberState(Enum):
     START = auto()
+    AFTER_MINUS = auto()
+    AFTER_ZERO = auto()
     AFTER_DIGIT = auto()
     AFTER_DOT = auto()
+    AFTER_DECIMAL_DIGIT = auto()
     NUMBER_DONE = auto()
 
 
@@ -26,6 +29,15 @@ class StringState(Enum):
     CLOSED = auto()
 
 def select_next_token(logits: list[float], valid_ids: set[int]) -> int:
+    """Pick the highest-scoring token id, restricted to valid_ids.
+
+    Args:
+        logits: The raw logits for every token in the vocabulary.
+        valid_ids: The token ids allowed at this generation step.
+
+    Returns:
+        The id of the highest-scoring token among valid_ids.
+    """
     masked_logits = np.empty(len(logits))
     masked_logits.fill(-np.inf)
     valid_ids = list(valid_ids)
@@ -36,8 +48,22 @@ def select_next_token(logits: list[float], valid_ids: set[int]) -> int:
     return next_token
 
 def generate_number(model: Small_LLM_Model, vocab: VocabIndex, input_ids: list[int]) -> tuple[float, list[int]]:
+    """Generate a JSON-valid number via constrained decoding.
+
+    Caps the number of digits generated (max_digits) to guarantee
+    termination even if the model never favors stopping on its own.
+
+    Args:
+        model: The language model used to obtain logits.
+        vocab: Precomputed vocabulary lookups.
+        input_ids: The token ids generated so far.
+
+    Returns:
+        A tuple of the parsed float value and the updated input_ids.
+    """
     state = NumberState.START
     gen = ""
+    max_digits = 15
 
     while state != NumberState.NUMBER_DONE:
         if state == NumberState.START:
@@ -46,10 +72,35 @@ def generate_number(model: Small_LLM_Model, vocab: VocabIndex, input_ids: list[i
             next_token = select_next_token(logits, valid_ids)
             input_ids.append(next_token)
             gen += vocab.id_to_str[next_token]
-            state = NumberState.AFTER_DIGIT
+            if next_token == vocab.minus_id:
+                state = NumberState.AFTER_MINUS
+            elif next_token == vocab.zero_id:
+                state = NumberState.AFTER_ZERO
+            else:
+                state = NumberState.AFTER_DIGIT
+        elif state == NumberState.AFTER_MINUS:
+            logits = model.get_logits_from_input_ids(input_ids)
+            valid_ids = vocab.digits_id
+            next_token = select_next_token(logits, valid_ids)
+            input_ids.append(next_token)
+            gen += vocab.id_to_str[next_token]
+            if next_token == vocab.zero_id:
+                state = NumberState.AFTER_ZERO
+            else:
+                state = NumberState.AFTER_DIGIT
+        elif state == NumberState.AFTER_ZERO:
+            logits = model.get_logits_from_input_ids(input_ids)
+            valid_ids = {vocab.dot_id}
+            next_token = select_next_token(logits, valid_ids)
+            input_ids.append(next_token)
+            gen += vocab.id_to_str[next_token]
+            state = NumberState.AFTER_DOT
         elif state == NumberState.AFTER_DIGIT:
             logits = model.get_logits_from_input_ids(input_ids)
-            valid_ids = vocab.digits_id | {vocab.dot_id}
+            if len(gen) >= max_digits:
+                valid_ids = {vocab.dot_id}
+            else:
+                valid_ids = vocab.digits_id | {vocab.dot_id}
             next_token = select_next_token(logits, valid_ids)
             input_ids.append(next_token)
             gen += vocab.id_to_str[next_token]
@@ -57,7 +108,17 @@ def generate_number(model: Small_LLM_Model, vocab: VocabIndex, input_ids: list[i
                 state = NumberState.AFTER_DOT
         elif state == NumberState.AFTER_DOT:
             logits = model.get_logits_from_input_ids(input_ids)
-            valid_ids = vocab.digits_id | {vocab.structural_ids[","]} | {vocab.structural_ids["}"]}
+            valid_ids = vocab.digits_id
+            next_token = select_next_token(logits, valid_ids)
+            input_ids.append(next_token)
+            gen += vocab.id_to_str[next_token]
+            state = NumberState.AFTER_DECIMAL_DIGIT
+        elif state == NumberState.AFTER_DECIMAL_DIGIT:
+            logits = model.get_logits_from_input_ids(input_ids)
+            if len(gen) >= max_digits:
+                valid_ids = {vocab.structural_ids[","]} | {vocab.structural_ids["}"]}
+            else:
+                valid_ids = vocab.digits_id | {vocab.structural_ids[","]} | {vocab.structural_ids["}"]}
             next_token = select_next_token(logits, valid_ids)
             input_ids.append(next_token)
             if next_token in (vocab.structural_ids["}"], vocab.structural_ids[","]):
