@@ -167,5 +167,19 @@ def generate_string(model: Small_LLM_Model, vocab: VocabIndex, input_ids: list[i
 
     return result
 
+def generate_boolean(model: Small_LLM_Model, vocab: VocabIndex, input_ids: list[int]) -> tuple[bool, list[int]]:
+    logits = model.get_logits_from_input_ids(input_ids)
+    valid_ids = {vocab.true_id} | {vocab.false_id}
+    next_token = select_next_token(logits, valid_ids)
+    input_ids.append(next_token)
+    if next_token == vocab.true_id:
+        gen = True
+    else:
+        gen = False
+
+    result: tuple[bool, list[int]] = (gen, input_ids)
+
+    return result
+
 
 

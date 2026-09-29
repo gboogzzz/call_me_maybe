@@ -19,6 +19,8 @@ class VocabIndex:
         self.zero_id: int = vocab["0"]
         self.dot_id: int = vocab["."]
         self.minus_id: int = vocab["-"]
+        self.true_id: int = vocab["true"]
+        self.false_id: int = vocab["false"]
         self.structural_ids: dict[str, int] = self._build_structural_ids()
         self.forced_sequences_first: dict[str, list[int]] = self._build_forced_sequences(['"name"', '"prompt"', '"parameters"'])
         self.forced_sequences_next: dict[str, list[int]] = self._build_forced_sequences([' "name"', ' "prompt"', ' "parameters"'])
