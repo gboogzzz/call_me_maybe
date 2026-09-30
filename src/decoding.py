@@ -46,7 +46,7 @@ def select_next_token(logits: list[float], valid_ids: set[int]) -> int:
 
     return next_token
 
-def generate_number(model: Small_LLM_Model, vocab: VocabIndex, input_ids: list[int]) -> tuple[float, list[int]]:
+def generate_number(model: Small_LLM_Model, vocab: VocabIndex, input_ids: list[int], terminator_id: int) -> tuple[float, list[int]]:
     """Generate a JSON-valid number via constrained decoding.
 
     Caps the number of digits generated (max_digits) to guarantee
@@ -56,6 +56,9 @@ def generate_number(model: Small_LLM_Model, vocab: VocabIndex, input_ids: list[i
         model: The language model used to obtain logits.
         vocab: Precomputed vocabulary lookups.
         input_ids: The token ids generated so far.
+        terminator_id: The single token id ("," or "}") that must follow
+            this number, determined by the caller from the parameter
+            schema position (not a choice left to the model).
 
     Returns:
         A tuple of the parsed float value and the updated input_ids.
@@ -115,12 +118,12 @@ def generate_number(model: Small_LLM_Model, vocab: VocabIndex, input_ids: list[i
         elif state == NumberState.AFTER_DECIMAL_DIGIT:
             logits = model.get_logits_from_input_ids(input_ids)
             if len(gen) >= max_digits:
-                valid_ids = {vocab.structural_ids[","]} | {vocab.structural_ids["}"]}
+                valid_ids = {terminator_id}
             else:
-                valid_ids = vocab.digits_id | {vocab.structural_ids[","]} | {vocab.structural_ids["}"]}
+                valid_ids = vocab.digits_id | {terminator_id}
             next_token = select_next_token(logits, valid_ids)
             input_ids.append(next_token)
-            if next_token in (vocab.structural_ids["}"], vocab.structural_ids[","]):
+            if next_token == terminator_id:
                 state = NumberState.NUMBER_DONE
             else:
                 gen += vocab.id_to_str[next_token]
@@ -180,6 +183,56 @@ def generate_boolean(model: Small_LLM_Model, vocab: VocabIndex, input_ids: list[
     result: tuple[bool, list[int]] = (gen, input_ids)
 
     return result
+
+def generate_parameters(model: Small_LLM_Model, vocab: VocabIndex, input_ids: list[int], parameters_schema: dict) -> tuple[dict, list[int]]:
+    """Generate a JSON-valid parameters object via constrained decoding.
+
+    Iterates the function's parameter schema in order, forcing each
+    known key literal and delegating each value to the generator that
+    matches its declared type (number, string, or boolean). The comma
+    or closing brace after each value is either produced internally
+    (generate_number) or forced here, depending on the generator.
+
+    Args:
+        model: The language model used to obtain logits.
+        vocab: Precomputed vocabulary lookups.
+        input_ids: The token ids generated so far.
+        parameters_schema: The "parameters" mapping from the chosen
+            function's definition, e.g. {"a": {"type": "number"}}.
+
+    Returns:
+        A tuple of the generated parameters dict (native Python types)
+        and the updated input_ids.
+    """
+    gen = {}
+    total = len(parameters_schema)
+
+    input_ids.append(vocab.structural_ids["{"])
+    for i, (key, spec) in enumerate(parameters_schema.items()):
+        literal_key = f'"{key}":' if i == 0 else f' "{key}":'
+        key_ids = vocab.encode_to_ids(literal_key)
+        input_ids.extend(key_ids)
+        is_last = (i == total - 1)
+        if is_last:
+            terminator_id = vocab.structural_ids["}"]
+        else:
+            terminator_id = vocab.structural_ids[","]
+        if spec["type"] == "number":
+            value, input_ids = generate_number(model, vocab, input_ids, terminator_id)
+        elif spec["type"] == "string":
+            input_ids.append(vocab.structural_ids['"'])
+            value, input_ids = generate_string(model, vocab, input_ids)
+            input_ids.append(terminator_id)
+        elif spec["type"] == "boolean":
+            value, input_ids = generate_boolean(model, vocab, input_ids)
+            input_ids.append(terminator_id)
+        gen[key] = value
+
+    return (gen, input_ids)
+
+
+
+
 
 
 

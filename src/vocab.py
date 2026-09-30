@@ -25,7 +25,7 @@ class VocabIndex:
         self.forced_sequences_first: dict[str, list[int]] = self._build_forced_sequences(['"name"', '"prompt"', '"parameters"'])
         self.forced_sequences_next: dict[str, list[int]] = self._build_forced_sequences([' "name"', ' "prompt"', ' "parameters"'])
 
-    def _encode_to_ids(self, text: str) -> list[int]:
+    def encode_to_ids(self, text: str) -> list[int]:
         """Encode a text string into a plain list of token ids.
 
         Args:
@@ -47,7 +47,7 @@ class VocabIndex:
         struct_ids: dict[str, int] = {}
 
         for v in struct_values:
-            token_id = self._encode_to_ids(v)
+            token_id = self.encode_to_ids(v)
             struct_ids[v] = token_id[0]
 
         return struct_ids
@@ -66,7 +66,7 @@ class VocabIndex:
         forced_seq: dict[str, list[int]] = {}
 
         for v in keys:
-            tokens_ids = self._encode_to_ids(v)
+            tokens_ids = self.encode_to_ids(v)
             forced_seq[v.strip()] = tokens_ids
 
         return forced_seq
