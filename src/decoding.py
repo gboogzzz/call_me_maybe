@@ -230,6 +230,34 @@ def generate_parameters(model: Small_LLM_Model, vocab: VocabIndex, input_ids: li
 
     return (gen, input_ids)
 
+def generate_output(model: Small_LLM_Model, vocab: VocabIndex, prompt: str, fn_name:str, parameters_schema: dict) -> tuple[dict, list[int]]:
+    input_ids: list[int] = vocab.encode_to_ids(prompt)
+    
+    input_ids.append(vocab.structural_ids["{"])
+    input_ids.extend(vocab.forced_sequences_first['"prompt"'])
+    input_ids.append(vocab.structural_ids[":"])
+    prompt_str = f' "{prompt}"'
+    prompt_str_ids = vocab.encode_to_ids(prompt_str)
+    input_ids.extend(prompt_str_ids)
+    input_ids.append(vocab.structural_ids[","])
+    input_ids.extend(vocab.forced_sequences_next['"name"'])
+    input_ids.append(vocab.structural_ids[":"])
+    fn_name_str = f' "{fn_name}"'
+    fn_name_str_ids = vocab.encode_to_ids(fn_name_str)
+    input_ids.extend(fn_name_str_ids)
+    input_ids.append(vocab.structural_ids[","])
+    input_ids.extend(vocab.forced_sequences_next['"parameters"'])
+    input_ids.append(vocab.structural_ids[":"])
+    value, input_ids = generate_parameters(model, vocab, input_ids, parameters_schema)
+
+    output = {}
+    output["prompt"] = prompt
+    output["name"] = fn_name
+    output["parameters"] = value
+
+    return (output, input_ids)
+
+
 
 
 
