@@ -21,7 +21,7 @@ def _read_json_array(path: str) -> list[dict]:
         print("File not found: ", e)
         sys.exit(1)
     except JSONDecodeError as e:
-        print("JSON file mal formed:", e)
+        print("JSON file malformed:", e)
         sys.exit(1)
 
     return all_data

@@ -4,15 +4,6 @@ from .vocab import VocabIndex
 from llm_sdk import Small_LLM_Model
 
 
-class StructuralState(Enum):
-    EXPECT_OPEN_BRACE = auto()
-    EXPECT_KEY = auto()
-    EXPECT_COLON = auto()
-    EXPECT_VALUE = auto()
-    EXPECT_COMMA_OR_CLOSE = auto()
-    DONE = auto()
-
-
 class NumberState(Enum):
     START = auto()
     AFTER_MINUS = auto()
@@ -230,7 +221,20 @@ def generate_parameters(model: Small_LLM_Model, vocab: VocabIndex, input_ids: li
 
     return (gen, input_ids)
 
-def generate_output(model: Small_LLM_Model, vocab: VocabIndex, prompt: str, fn_name:str, parameters_schema: dict) -> tuple[dict, list[int]]:
+def generate_output(model: Small_LLM_Model, vocab: VocabIndex, prompt: str, fn_trie: dict[int, dict], fn_definitions: dict[str, dict]) -> tuple[dict, list[int]]:
+    """Generate the full JSON output entry for one prompt.
+
+    Args:
+        model: The language model used to obtain logits.
+        vocab: Precomputed vocabulary lookups.
+        prompt: The original natural-language request.
+        fn_trie: The function-name trie from build_function_trie.
+        fn_definitions: All function definitions, keyed by name.
+
+    Returns:
+        A tuple of the output dict and the updated input_ids.
+    """
+
     input_ids: list[int] = vocab.encode_to_ids(prompt)
     
     input_ids.append(vocab.structural_ids["{"])
@@ -240,22 +244,87 @@ def generate_output(model: Small_LLM_Model, vocab: VocabIndex, prompt: str, fn_n
     prompt_str_ids = vocab.encode_to_ids(prompt_str)
     input_ids.extend(prompt_str_ids)
     input_ids.append(vocab.structural_ids[","])
+
     input_ids.extend(vocab.forced_sequences_next['"name"'])
     input_ids.append(vocab.structural_ids[":"])
-    fn_name_str = f' "{fn_name}"'
-    fn_name_str_ids = vocab.encode_to_ids(fn_name_str)
-    input_ids.extend(fn_name_str_ids)
+    input_ids.extend(vocab.encode_to_ids(' "'))
+
+    examples = "\n\n".join(f"Request: {definition['description']}\nFunction: {name}" for name, definition in fn_definitions.items())
+    context = f"{examples}\n\nRequest: {prompt}\nFunction:"
+    
+    prompt_ids = vocab.encode_to_ids(context)
+    fn_name_str, input_ids = select_function_name(model, input_ids, prompt_ids, fn_trie)
+    input_ids.append(vocab.structural_ids['"'])
     input_ids.append(vocab.structural_ids[","])
+
     input_ids.extend(vocab.forced_sequences_next['"parameters"'])
     input_ids.append(vocab.structural_ids[":"])
-    value, input_ids = generate_parameters(model, vocab, input_ids, parameters_schema)
+    value, input_ids = generate_parameters(model, vocab, input_ids, fn_definitions[fn_name_str]["parameters"])
 
     output = {}
     output["prompt"] = prompt
-    output["name"] = fn_name
+    output["name"] = fn_name_str
     output["parameters"] = value
 
     return (output, input_ids)
+
+def build_function_trie(vocab: VocabIndex, function_names: list[str]) -> dict[int, dict]:
+    """Build a token-level trie over candidate function names.
+
+    Args:
+        vocab: Precomputed vocabulary lookups, for encoding names.
+        function_names: The candidate function names to index.
+
+    Returns:
+        The trie's root node (token id -> child node), where a node
+        holding "end" marks a complete function name.
+    """
+
+    trie = {}
+    for name in function_names:
+        actual_name = trie
+        fn_token_ids = vocab.encode_to_ids(name)
+        for token in fn_token_ids:
+            if token not in actual_name:
+                actual_name[token] = {}
+            actual_name = actual_name[token]
+        actual_name["end"] = name
+
+    return trie
+
+def select_function_name(model: Small_LLM_Model, input_ids: list[int], prompt_ids: list[int], trie:dict[int, dict]) -> tuple[str, list[int]]:
+    """Select a function name via constrained decoding over a trie.
+
+    Walks the trie one token at a time, restricting each choice to
+    the current node's child tokens, until a node marks the end of a
+    complete function name.
+
+    Args:
+        model: The language model used to obtain logits.
+        input_ids: The full output's token ids generated so far.
+        prompt_ids: Clean, growing prompt context used for the decision.
+        trie: The function-name trie from build_function_trie.
+
+    Returns:
+        A tuple of the selected function name and the updated input_ids.
+    """
+
+    actual_node = trie
+
+    while "end" not in actual_node:
+        logits = model.get_logits_from_input_ids(prompt_ids)
+        valid_ids = {token_id for token_id in actual_node.keys() if isinstance(token_id, int) }
+        next_token = select_next_token(logits, valid_ids)
+        prompt_ids.append(next_token)
+        input_ids.append(next_token)
+        actual_node = actual_node[next_token]
+
+    return (actual_node["end"], input_ids)
+
+
+
+
+
 
 
 

@@ -11,7 +11,7 @@ class VocabIndex:
             vocab = json.load(f)
 
         self.model = model
-        self.id_to_str: dict[int, str] = {token_id: token_str for token_str, token_id in vocab.items()}
+        self.id_to_str: dict[int, str] = {token_id: token_str.replace("Ġ", " ") for token_str, token_id in vocab.items()}
         quote_containing_ids: set[int] = {token_id for token_id, token_str in self.id_to_str.items() if '"' in token_str}
         self.string_content_ids: set[int] = set(self.id_to_str.keys()) - quote_containing_ids 
         self.space_id: int = vocab["Ġ"]
