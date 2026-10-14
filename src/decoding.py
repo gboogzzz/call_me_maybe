@@ -124,7 +124,7 @@ def generate_number(model: Small_LLM_Model, vocab: VocabIndex, input_ids: list[i
     return result
 
 
-def generate_string(model: Small_LLM_Model, vocab: VocabIndex, input_ids: list[int]) -> tuple[str, list[int]]:
+def generate_string(model: Small_LLM_Model, vocab: VocabIndex, input_ids: list[int], prompt_ids: list[int]) -> tuple[str, list[int]]:
     """Generate a JSON-valid string via constrained decoding.
 
     Caps the content length (max_length) to guarantee termination
@@ -145,12 +145,13 @@ def generate_string(model: Small_LLM_Model, vocab: VocabIndex, input_ids: list[i
 
     while state != StringState.CLOSED:
         if state == StringState.INSIDE:
-            logits = model.get_logits_from_input_ids(input_ids)
+            logits = model.get_logits_from_input_ids(prompt_ids)
             if len(gen) >= max_str_len:
                 valid_ids = {vocab.structural_ids['"']}
             else:
                 valid_ids = vocab.string_content_ids | {vocab.structural_ids['"']}
             next_token = select_next_token(logits, valid_ids)
+            prompt_ids.append(next_token)
             input_ids.append(next_token)
             if next_token == vocab.structural_ids['"']:
                 state = StringState.CLOSED
@@ -175,7 +176,7 @@ def generate_boolean(model: Small_LLM_Model, vocab: VocabIndex, input_ids: list[
 
     return result
 
-def generate_parameters(model: Small_LLM_Model, vocab: VocabIndex, input_ids: list[int], parameters_schema: dict) -> tuple[dict, list[int]]:
+def generate_parameters(model: Small_LLM_Model, vocab: VocabIndex, input_ids: list[int], prompt: str, parameters_schema: dict) -> tuple[dict, list[int]]:
     """Generate a JSON-valid parameters object via constrained decoding.
 
     Iterates the function's parameter schema in order, forcing each
@@ -212,7 +213,9 @@ def generate_parameters(model: Small_LLM_Model, vocab: VocabIndex, input_ids: li
             value, input_ids = generate_number(model, vocab, input_ids, terminator_id)
         elif spec["type"] == "string":
             input_ids.append(vocab.structural_ids['"'])
-            value, input_ids = generate_string(model, vocab, input_ids)
+            context = f"{prompt}\n" + "".join(f'{k}: "{v}"\n' for k, v in gen.items()) + f'{key}: "'
+            prompt_ids = vocab.encode_to_ids(context)
+            value, input_ids = generate_string(model, vocab, input_ids, prompt_ids)
             input_ids.append(terminator_id)
         elif spec["type"] == "boolean":
             value, input_ids = generate_boolean(model, vocab, input_ids)
@@ -259,7 +262,7 @@ def generate_output(model: Small_LLM_Model, vocab: VocabIndex, prompt: str, fn_t
 
     input_ids.extend(vocab.forced_sequences_next['"parameters"'])
     input_ids.append(vocab.structural_ids[":"])
-    value, input_ids = generate_parameters(model, vocab, input_ids, fn_definitions[fn_name_str]["parameters"])
+    value, input_ids = generate_parameters(model, vocab, input_ids, prompt, fn_definitions[fn_name_str]["parameters"], fn_definitions[fn_name_str]["description"])
 
     output = {}
     output["prompt"] = prompt
