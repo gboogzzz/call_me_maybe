@@ -1,3 +1,4 @@
+from typing import Dict, List, Set
 from llm_sdk import Small_LLM_Model
 import json
 
@@ -11,21 +12,21 @@ class VocabIndex:
             vocab = json.load(f)
 
         self.model = model
-        self.id_to_str: dict[int, str] = {token_id: token_str.replace("Ġ", " ") for token_str, token_id in vocab.items()}
-        quote_containing_ids: set[int] = {token_id for token_id, token_str in self.id_to_str.items() if '"' in token_str}
-        self.string_content_ids: set[int] = set(self.id_to_str.keys()) - quote_containing_ids 
+        self.id_to_str: Dict[int, str] = {token_id: token_str.replace("Ġ", " ") for token_str, token_id in vocab.items()}
+        quote_containing_ids: Set[int] = {token_id for token_id, token_str in self.id_to_str.items() if '"' in token_str}
+        self.string_content_ids: Set[int] = set(self.id_to_str.keys()) - quote_containing_ids
         self.space_id: int = vocab["Ġ"]
-        self.digits_id: set[int] = {token_id for token_id, token_str in self.id_to_str.items() if token_str in "0123456789"}
+        self.digits_id: Set[int] = {token_id for token_id, token_str in self.id_to_str.items() if token_str in "0123456789"}
         self.zero_id: int = vocab["0"]
         self.dot_id: int = vocab["."]
         self.minus_id: int = vocab["-"]
         self.true_id: int = vocab["true"]
         self.false_id: int = vocab["false"]
-        self.structural_ids: dict[str, int] = self._build_structural_ids()
-        self.forced_sequences_first: dict[str, list[int]] = self._build_forced_sequences(['"name"', '"prompt"', '"parameters"'])
-        self.forced_sequences_next: dict[str, list[int]] = self._build_forced_sequences([' "name"', ' "prompt"', ' "parameters"'])
+        self.structural_ids: Dict[str, int] = self._build_structural_ids()
+        self.forced_sequences_first: Dict[str, List[int]] = self._build_forced_sequences(['"name"', '"prompt"', '"parameters"'])
+        self.forced_sequences_next: Dict[str, List[int]] = self._build_forced_sequences([' "name"', ' "prompt"', ' "parameters"'])
 
-    def encode_to_ids(self, text: str) -> list[int]:
+    def encode_to_ids(self, text: str) -> List[int]:
         """Encode a text string into a plain list of token ids.
 
         Args:
@@ -35,16 +36,17 @@ class VocabIndex:
             The list of token ids produced by the model's tokenizer.
         """
         tensor = self.model.encode(text)
-        return tensor[0].tolist()
+        ids: List[int] = tensor[0].tolist()
+        return ids
 
-    def _build_structural_ids(self) -> dict[str, int]:
+    def _build_structural_ids(self) -> Dict[str, int]:
         """Map each JSON structural symbol to its single token id.
 
         Returns:
             A dict from symbol (e.g. "{", ",") to its token id.
         """
-        struct_values: list[str] = ["{", "}", "[", "]", ",", ":", '"']
-        struct_ids: dict[str, int] = {}
+        struct_values: List[str] = ["{", "}", "[", "]", ",", ":", '"']
+        struct_ids: Dict[str, int] = {}
 
         for v in struct_values:
             token_id = self.encode_to_ids(v)
@@ -52,7 +54,7 @@ class VocabIndex:
 
         return struct_ids
 
-    def _build_forced_sequences(self, keys: list[str]) -> dict[str, list[int]]:
+    def _build_forced_sequences(self, keys: List[str]) -> Dict[str, List[int]]:
         """Precompute the token id sequences for a set of fixed JSON key literals.
 
         Args:
@@ -63,7 +65,7 @@ class VocabIndex:
             A dict from the stripped, quoted key literal to the list of
             token ids that produce it in that context.
         """
-        forced_seq: dict[str, list[int]] = {}
+        forced_seq: Dict[str, List[int]] = {}
 
         for v in keys:
             tokens_ids = self.encode_to_ids(v)

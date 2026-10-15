@@ -1,11 +1,13 @@
 import sys
 import json
 from json import JSONDecodeError
+from typing import Any, Dict, List
+
 from pydantic import ValidationError
 from .models import FunctionDefinition, TestPrompt
 
 
-def _read_json_array(path: str) -> list[dict]:
+def _read_json_array(path: str) -> List[Dict[str, Any]]:
     """Read and parse a JSON file containing a top-level array.
 
     Args:
@@ -16,7 +18,7 @@ def _read_json_array(path: str) -> list[dict]:
     """
     try:
         with open(path, encoding="utf-8") as f:
-            all_data: list[dict] = json.load(f)
+            all_data: List[Dict[str, Any]] = json.load(f)
     except FileNotFoundError as e:
         print("File not found: ", e)
         sys.exit(1)
@@ -26,9 +28,10 @@ def _read_json_array(path: str) -> list[dict]:
 
     return all_data
 
+
 def load_function_definitions(
-        path: str ="data/input/functions_definition.json"
-        ) -> list[FunctionDefinition]:
+        path: str = "data/input/functions_definition.json"
+        ) -> List[FunctionDefinition]:
     """Load and validate the available function definitions.
 
     Args:
@@ -38,8 +41,8 @@ def load_function_definitions(
         A list of validated FunctionDefinition objects.
     """
 
-    fn_definitions: list[dict] = _read_json_array(path)
-    fn_validated: list[FunctionDefinition] = []
+    fn_definitions: List[Dict[str, Any]] = _read_json_array(path)
+    fn_validated: List[FunctionDefinition] = []
 
     try:
         for f in fn_definitions:
@@ -51,9 +54,10 @@ def load_function_definitions(
 
     return fn_validated
 
+
 def load_test_prompts(
         path: str = "data/input/function_calling_tests.json"
-        ) -> list[TestPrompt]:
+        ) -> List[TestPrompt]:
     """Load and validate the natural language test prompts.
 
     Args:
@@ -63,9 +67,9 @@ def load_test_prompts(
         A list of validated TestPrompt objects.
     """
 
-    t_prompts: list[dict] = _read_json_array(path)
-    prompt_validated: list[TestPrompt] = []
-    
+    t_prompts: List[Dict[str, Any]] = _read_json_array(path)
+    prompt_validated: List[TestPrompt] = []
+
     try:
         for t in t_prompts:
             prompt = TestPrompt.model_validate(t)
@@ -73,13 +77,5 @@ def load_test_prompts(
     except ValidationError as e:
         print("Prompt not defined correctly: ", e)
         sys.exit(1)
-    
+
     return prompt_validated
-
-
-
-    
-    
-
-
-
