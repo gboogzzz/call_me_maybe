@@ -25,6 +25,12 @@ def _read_json_array(path: str) -> List[Dict[str, Any]]:
     except JSONDecodeError as e:
         print("JSON file malformed:", e)
         sys.exit(1)
+    except (OSError, UnicodeDecodeError) as e:
+        print(f"Cannot read {path}: {e}")
+        sys.exit(1)
+    if not isinstance(all_data, List):
+        print(f"{path} must contain a JSON array")
+        sys.exit(1)
 
     return all_data
 
@@ -42,6 +48,9 @@ def load_function_definitions(
     """
 
     fn_definitions: List[Dict[str, Any]] = _read_json_array(path)
+    if not fn_definitions:
+        print("functions_definition.json file is empty")
+        sys.exit(1)
     fn_validated: List[FunctionDefinition] = []
 
     try:
@@ -68,6 +77,9 @@ def load_test_prompts(
     """
 
     t_prompts: List[Dict[str, Any]] = _read_json_array(path)
+    if not t_prompts:
+        print("function_calling_tests.json file is empty")
+        sys.exit(1)
     prompt_validated: List[TestPrompt] = []
 
     try:

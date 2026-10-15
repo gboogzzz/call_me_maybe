@@ -17,3 +17,18 @@ members = [
 
 [tool.uv.sources]
 llm-sdk = { workspace = true }
+torch = { index = "pytorch-cpu" }
+
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
+
+[dependency-groups]
+dev = [
+    "flake8>=7.4.1",
+    "mypy>=2.4.0",
+]
+
+[tool.mypy]
+exclude = ["^\\.venv/", "^llm_sdk/", "^\\.hf_cache/", "^\\.mypy_cache/"]

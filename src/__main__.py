@@ -1,6 +1,6 @@
 from typing import Any, Dict, List
 
-from llm_sdk import Small_LLM_Model
+from llm_sdk import Small_LLM_Model  # type: ignore
 from .loaders import load_function_definitions, load_test_prompts
 from .vocab import VocabIndex
 from .decoding import generate_output, build_function_trie
@@ -12,9 +12,18 @@ import argparse
 def main() -> None:
 
     parser = argparse.ArgumentParser()
-    parser.add_argument("--functions_definition", default="data/input/functions_definition.json")
-    parser.add_argument("--input", default="data/input/function_calling_tests.json")
-    parser.add_argument("--output", default="data/output/function_calling_results.json")
+    parser.add_argument(
+        "--functions_definition",
+        default="data/input/functions_definition.json",
+    )
+    parser.add_argument(
+        "--input",
+        default="data/input/function_calling_tests.json",
+    )
+    parser.add_argument(
+        "--output",
+        default="data/output/function_calling_results.json",
+    )
 
     args = parser.parse_args()
 
@@ -38,7 +47,9 @@ def main() -> None:
 
     for i, prompt_text in enumerate(tp_list):
         print(f"Prompt {i}:\n {prompt_text}\n")
-        output, _ = generate_output(model, vocab, prompt_text, fn_trie, fn_dict)
+        output, _ = generate_output(
+            model, vocab, prompt_text, fn_trie, fn_dict
+        )
         list_outputs.append(output)
         print(f"Output Prompt {i}:\n{output}\n")
 

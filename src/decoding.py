@@ -4,7 +4,7 @@ from typing import Any, Dict, List, Set, Tuple, Union
 import numpy as np
 
 from .vocab import VocabIndex
-from llm_sdk import Small_LLM_Model
+from llm_sdk import Small_LLM_Model  # type: ignore
 
 
 TrieNode = Dict[Any, Any]
@@ -46,7 +46,12 @@ def select_next_token(logits: List[float], valid_ids: Set[int]) -> int:
     return next_token
 
 
-def generate_number(model: Small_LLM_Model, vocab: VocabIndex, input_ids: List[int], terminator_id: int) -> Tuple[Union[int, float], List[int]]:
+def generate_number(
+    model: Small_LLM_Model,
+    vocab: VocabIndex,
+    input_ids: List[int],
+    terminator_id: int,
+) -> Tuple[Union[int, float], List[int]]:
     """Generate a JSON-valid number via constrained decoding.
 
     Caps the number of digits generated (max_digits) to guarantee
@@ -142,7 +147,12 @@ def generate_number(model: Small_LLM_Model, vocab: VocabIndex, input_ids: List[i
     return result
 
 
-def generate_string(model: Small_LLM_Model, vocab: VocabIndex, input_ids: List[int], prompt_ids: List[int]) -> Tuple[str, List[int]]:
+def generate_string(
+    model: Small_LLM_Model,
+    vocab: VocabIndex,
+    input_ids: List[int],
+    prompt_ids: List[int],
+) -> Tuple[str, List[int]]:
     """Generate a JSON-valid string via constrained decoding.
 
     Caps the content length (max_length) to guarantee termination
@@ -163,18 +173,19 @@ def generate_string(model: Small_LLM_Model, vocab: VocabIndex, input_ids: List[i
     state = StringState.INSIDE
     gen = ""
     max_str_len = 80
+    quote_id = vocab.structural_ids['"']
 
     while state != StringState.CLOSED:
         if state == StringState.INSIDE:
             logits = model.get_logits_from_input_ids(prompt_ids)
             if len(gen) >= max_str_len:
-                valid_ids = {vocab.structural_ids['"']}
+                valid_ids = {quote_id}
             else:
-                valid_ids = vocab.string_content_ids | {vocab.structural_ids['"']}
+                valid_ids = vocab.string_content_ids | {quote_id}
             next_token = select_next_token(logits, valid_ids)
             prompt_ids.append(next_token)
             input_ids.append(next_token)
-            if next_token == vocab.structural_ids['"']:
+            if next_token == quote_id:
                 state = StringState.CLOSED
             else:
                 gen += vocab.id_to_str[next_token]
@@ -184,7 +195,11 @@ def generate_string(model: Small_LLM_Model, vocab: VocabIndex, input_ids: List[i
     return result
 
 
-def generate_boolean(model: Small_LLM_Model, vocab: VocabIndex, input_ids: List[int]) -> Tuple[bool, List[int]]:
+def generate_boolean(
+    model: Small_LLM_Model,
+    vocab: VocabIndex,
+    input_ids: List[int],
+) -> Tuple[bool, List[int]]:
     """Generate a JSON-valid boolean via constrained decoding.
 
     Args:
@@ -209,7 +224,13 @@ def generate_boolean(model: Small_LLM_Model, vocab: VocabIndex, input_ids: List[
     return result
 
 
-def generate_parameters(model: Small_LLM_Model, vocab: VocabIndex, input_ids: List[int], prompt: str, parameters_schema: Dict[str, Any]) -> Tuple[Dict[str, ParamValue], List[int]]:
+def generate_parameters(
+    model: Small_LLM_Model,
+    vocab: VocabIndex,
+    input_ids: List[int],
+    prompt: str,
+    parameters_schema: Dict[str, Any],
+) -> Tuple[Dict[str, ParamValue], List[int]]:
     """Generate a JSON-valid parameters object via constrained decoding.
 
     Iterates the function's parameter schema in order, forcing each
@@ -247,12 +268,17 @@ def generate_parameters(model: Small_LLM_Model, vocab: VocabIndex, input_ids: Li
 
         value: ParamValue
         if spec["type"] == "number":
-            value, input_ids = generate_number(model, vocab, input_ids, terminator_id)
+            value, input_ids = generate_number(
+                model, vocab, input_ids, terminator_id
+            )
         elif spec["type"] == "string":
             input_ids.append(vocab.structural_ids['"'])
-            context = f"{prompt}\n" + "".join(f'{k}: "{v}"\n' for k, v in gen.items()) + f'{key}: "'
+            history = "".join(f'{k}: "{v}"\n' for k, v in gen.items())
+            context = f"{prompt}\n" + history + f'{key}: "'
             prompt_ids = vocab.encode_to_ids(context)
-            value, input_ids = generate_string(model, vocab, input_ids, prompt_ids)
+            value, input_ids = generate_string(
+                model, vocab, input_ids, prompt_ids
+            )
             input_ids.append(terminator_id)
         elif spec["type"] == "boolean":
             value, input_ids = generate_boolean(model, vocab, input_ids)
@@ -262,7 +288,13 @@ def generate_parameters(model: Small_LLM_Model, vocab: VocabIndex, input_ids: Li
     return (gen, input_ids)
 
 
-def generate_output(model: Small_LLM_Model, vocab: VocabIndex, prompt: str, fn_trie: TrieNode, fn_definitions: Dict[str, Any]) -> Tuple[Dict[str, Any], List[int]]:
+def generate_output(
+    model: Small_LLM_Model,
+    vocab: VocabIndex,
+    prompt: str,
+    fn_trie: TrieNode,
+    fn_definitions: Dict[str, Any],
+) -> Tuple[Dict[str, Any], List[int]]:
     """Generate the full JSON output entry for one prompt.
 
     Args:
@@ -290,17 +322,28 @@ def generate_output(model: Small_LLM_Model, vocab: VocabIndex, prompt: str, fn_t
     input_ids.append(vocab.structural_ids[":"])
     input_ids.extend(vocab.encode_to_ids(' "'))
 
-    examples = "\n\n".join(f"Request: {definition['description']}\nFunction: {name}" for name, definition in fn_definitions.items())
+    examples = "\n\n".join(
+        f"Request: {definition['description']}\nFunction: {name}"
+        for name, definition in fn_definitions.items()
+    )
     context = f"{examples}\n\nRequest: {prompt}\nFunction:"
 
     prompt_ids = vocab.encode_to_ids(context)
-    fn_name_str, input_ids = select_function_name(model, input_ids, prompt_ids, fn_trie)
+    fn_name_str, input_ids = select_function_name(
+        model, input_ids, prompt_ids, fn_trie
+    )
     input_ids.append(vocab.structural_ids['"'])
     input_ids.append(vocab.structural_ids[","])
 
     input_ids.extend(vocab.forced_sequences_next['"parameters"'])
     input_ids.append(vocab.structural_ids[":"])
-    value, input_ids = generate_parameters(model, vocab, input_ids, prompt, fn_definitions[fn_name_str]["parameters"])
+    value, input_ids = generate_parameters(
+        model,
+        vocab,
+        input_ids,
+        prompt,
+        fn_definitions[fn_name_str]["parameters"],
+    )
 
     output: Dict[str, Any] = {}
     output["prompt"] = prompt
@@ -310,7 +353,10 @@ def generate_output(model: Small_LLM_Model, vocab: VocabIndex, prompt: str, fn_t
     return (output, input_ids)
 
 
-def build_function_trie(vocab: VocabIndex, function_names: List[str]) -> TrieNode:
+def build_function_trie(
+    vocab: VocabIndex,
+    function_names: List[str],
+) -> TrieNode:
     """Build a token-level trie over candidate function names.
 
     Args:
@@ -335,7 +381,12 @@ def build_function_trie(vocab: VocabIndex, function_names: List[str]) -> TrieNod
     return trie
 
 
-def select_function_name(model: Small_LLM_Model, input_ids: List[int], prompt_ids: List[int], trie: TrieNode) -> Tuple[str, List[int]]:
+def select_function_name(
+    model: Small_LLM_Model,
+    input_ids: List[int],
+    prompt_ids: List[int],
+    trie: TrieNode,
+) -> Tuple[str, List[int]]:
     """Select a function name via constrained decoding over a trie.
 
     Walks the trie one token at a time, restricting each choice to
@@ -356,7 +407,11 @@ def select_function_name(model: Small_LLM_Model, input_ids: List[int], prompt_id
 
     while "end" not in actual_node:
         logits = model.get_logits_from_input_ids(prompt_ids)
-        valid_ids = {token_id for token_id in actual_node.keys() if isinstance(token_id, int)}
+        valid_ids = {
+            token_id
+            for token_id in actual_node.keys()
+            if isinstance(token_id, int)
+        }
         next_token = select_next_token(logits, valid_ids)
         prompt_ids.append(next_token)
         input_ids.append(next_token)

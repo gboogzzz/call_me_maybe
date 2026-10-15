@@ -1,30 +1,51 @@
 from typing import Dict, List, Set
-from llm_sdk import Small_LLM_Model
+from llm_sdk import Small_LLM_Model  # type: ignore
 import json
 
 
 class VocabIndex:
     """Precomputed vocabulary lookups used to guide constrained decoding."""
 
-    def __init__(self, model: Small_LLM_Model):
+    def __init__(self, model: Small_LLM_Model) -> None:
         path_to_vocab_file = model.get_path_to_vocab_file()
         with open(path_to_vocab_file, encoding="utf-8") as f:
             vocab = json.load(f)
 
         self.model = model
-        self.id_to_str: Dict[int, str] = {token_id: token_str.replace("Ġ", " ") for token_str, token_id in vocab.items()}
-        quote_containing_ids: Set[int] = {token_id for token_id, token_str in self.id_to_str.items() if '"' in token_str}
-        self.string_content_ids: Set[int] = set(self.id_to_str.keys()) - quote_containing_ids
+        self.id_to_str: Dict[int, str] = {
+            token_id: token_str.replace("Ġ", " ")
+            for token_str, token_id in vocab.items()
+        }
+        quote_containing_ids: Set[int] = {
+            token_id
+            for token_id, token_str in self.id_to_str.items()
+            if '"' in token_str
+        }
+        self.string_content_ids: Set[int] = (
+            set(self.id_to_str.keys()) - quote_containing_ids
+        )
         self.space_id: int = vocab["Ġ"]
-        self.digits_id: Set[int] = {token_id for token_id, token_str in self.id_to_str.items() if token_str in "0123456789"}
+        self.digits_id: Set[int] = {
+            token_id
+            for token_id, token_str in self.id_to_str.items()
+            if token_str in "0123456789"
+        }
         self.zero_id: int = vocab["0"]
         self.dot_id: int = vocab["."]
         self.minus_id: int = vocab["-"]
         self.true_id: int = vocab["true"]
         self.false_id: int = vocab["false"]
         self.structural_ids: Dict[str, int] = self._build_structural_ids()
-        self.forced_sequences_first: Dict[str, List[int]] = self._build_forced_sequences(['"name"', '"prompt"', '"parameters"'])
-        self.forced_sequences_next: Dict[str, List[int]] = self._build_forced_sequences([' "name"', ' "prompt"', ' "parameters"'])
+        self.forced_sequences_first: Dict[str, List[int]] = (
+            self._build_forced_sequences(
+                ['"name"', '"prompt"', '"parameters"']
+            )
+        )
+        self.forced_sequences_next: Dict[str, List[int]] = (
+            self._build_forced_sequences(
+                [' "name"', ' "prompt"', ' "parameters"']
+            )
+        )
 
     def encode_to_ids(self, text: str) -> List[int]:
         """Encode a text string into a plain list of token ids.
@@ -55,7 +76,7 @@ class VocabIndex:
         return struct_ids
 
     def _build_forced_sequences(self, keys: List[str]) -> Dict[str, List[int]]:
-        """Precompute the token id sequences for a set of fixed JSON key literals.
+        """Precompute token id sequences for fixed JSON key literals.
 
         Args:
             keys: The quoted key literals to encode, with or without a

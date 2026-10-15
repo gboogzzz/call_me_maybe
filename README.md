@@ -6,6 +6,18 @@
 
 A function-calling tool that turns a natural-language request (e.g. *"What is the sum of 2 and 3?"*) into a structured function call: a name and a JSON object of typed arguments (`fn_add_numbers`, `{"a": 2.0, "b": 3.0}`). The model is Qwen3-0.6B, accessed only through raw logits — all JSON validity and schema compliance come from constrained decoding, not from hoping the model behaves.
 
+## Installation
+
+### Installing in a 42 School Computer
+
+If you are running this in a 42 school computer, please run this in the `sgoinfre` directory, since in 42 we dont have a lot of space in home directory
+
+```
+export HF_HOME="$PWD/.cache/huggingface"
+export UV_CACHE_DIR="$PWD/.cache/uv"
+export PIP_CACHE_DIR="$PWD/.cache/pip"
+```
+
 ## Instructions
 
 ```bash
@@ -90,4 +102,4 @@ Output `function_calling_results.json`:
 
 Web research was used to look up the topics covered in this project (tokenization, constrained decoding, trie structures, and related concepts).
 
-**How AI was used:** Claude was used only to explain concepts as they were asked about during development.
+**How AI was used:** AI was used only to explain concepts as they were asked about during development.
